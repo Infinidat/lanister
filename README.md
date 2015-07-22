@@ -1,3 +1,10 @@
+Lanister
+=============
+
+Lanister is a Nexus switch manager, until something better comes along. It's
+based on [weber-minimal](https://github.com/vmalloc/weber-minimal), the readme
+of which has been included below.
+
 Weber-Minimal
 =============
 
