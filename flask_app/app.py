@@ -40,12 +40,12 @@ def create_app(config=None):
 
     Mail(app)
 
-    from .errors import errors
+    #from .errors import errors
     from .views import views
 
     app.register_blueprint(views)
 
-    for code in errors:
-        app.errorhandler(code)(errors[code])
+#    for code in errors:
+#        app.errorhandler(code)(errors[code])
 
     return app
