@@ -2,50 +2,158 @@ Lanister
 =============
 
 Lanister is a Nexus switch manager, until something better comes along. It's
-based on [weber-minimal](https://github.com/vmalloc/weber-minimal), the readme
-of which has been included below.
+based on [weber-minimal](https://github.com/vmalloc/weber-minimal) and is
+distributed under the BSD 3-clause license. Weber is as well, and the original
+license has been maintained as WEBER-LICENSE
 
-Weber-Minimal
-=============
-
-![Build Status](https://secure.travis-ci.org/vmalloc/weber-minimal.png?branch=master ) 
-
-weber-minimal is a Flask application template, intended to get you started with a Flask-powered webapp as quickly as possible. Unlike [weber-backend](https://github.com/vmalloc/weber-backend ), weber-minimal aims at a minimalistic app, with no database engine or other bells and whistles.
-
-weber-minimal puts an emphasis on ease of deployment (with *ansible*), and not getting in your way while you focus on your actual app logic.
-
-Getting Started
-===============
-
+Running
+============
 1. Check out the repository
-2. Go through the configuration in `flask_app/app.yml` - most configuration options there are self-explanatory, and you might be interested in tweaking them to your needs.
+
+2. Go through the configuration in `flask_app/app.yml` - most configuration
+   options there are self-explanatory, and you might be interested in tweaking
+   them to your needs.
+
 3. Make sure you have `virtualenv` installed
+
 4. Run the test server to experiment:
+
 ```
 $ python manage.py testserver
 ```
 
-Using an alternative Python version
-===================================
-By default, weber looks for a Python executable named `python2.7`. This can be overridden by changing `_lib/bootstrapping.py`. For example, it can be set to `python3.4`.
+Usage
+============
 
-If you use an alternative interpreter then remember to add it to `ansible/roles/common/vars/main.yml`.
-
-Installation/Deployment
-=======================
-
-See `INSTALLING.md`
-
-Development
-===========
-
-To start developing and testing, bootstrap the development environment with:
-
+Interface lookup in MAC address table:
 ```
-$ python manage.py bootstrap --develop
+$ curl http://127.0.0.1:8000/api/interfaces/\?macs=ecf4bbd60324,bc305bf6b830
+{
+  "ports": {
+    "bc:30:5b:f6:b8:30": "Eth13/47",
+    "ec:f4:bb:d6:03:24": "Eth101/1/5"
+  }
+}
 ```
 
-License
-=======
+Interface lookup by description:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/\?descriptions=SLOT48.NODE3.DATA1,SLOT48.NODE2.DATA1
+{
+  "ports": {
+    "SLOT48.NODE2.DATA1": "Eth17/41",
+    "SLOT48.NODE3.DATA1": "Eth17/40"
+  }
+}
+```
 
-Weber is distributed under the BSD 3-clause license.
+Interface running configuration:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/
+{
+  "config": [
+    "description SLOT48.NODE2.DATA1",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "spanning-tree port type edge trunk",
+    "mtu 9216",
+    "no shutdown"
+  ],
+  "name": "Eth17/41"
+}
+```
+
+Interface shutdown:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"down"}' -X PUT
+{
+  "config": [
+    "description SLOT48.NODE2.DATA1",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "spanning-tree port type edge trunk",
+    "mtu 9216"
+  ],
+  "name": "Eth17/41"
+}
+```
+
+Interface no shutdown:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"up"}' -X PUT
+{
+  "config": [
+    "description SLOT48.NODE2.DATA1",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "spanning-tree port type edge trunk",
+    "mtu 9216",
+    "no shutdown"
+  ],
+  "name": "Eth17/41"
+}
+```
+
+Port channel creation and configuration
+```
+$ curl http://127.0.0.1:8000/api/channels/48/3/ -d '{"config":["switchport","switchport mode trunk","switchport trunk native vlan 4","switchport trunk allowed vlan 4,10-11","mtu 9216","no shutdown"]}' -X POST
+{
+  "config": [
+    "description SLOT48.NODE3.LACP",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "mtu 9216"
+  ],
+  "name": "port-channel2483"
+}
+```
+
+Interface channel group binding:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":"2483"}' -X PUT
+{
+  "config": [
+    "description SLOT48.NODE2.DATA1",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "spanning-tree port type edge trunk",
+    "mtu 9216",
+    "channel-group 2483 mode active",
+    "no shutdown"
+  ],
+  "name": "Eth17/41"
+}
+```
+
+Interface channel group unbinding:
+```
+$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":""}' -X PUT
+{
+  "config": [
+    "description SLOT48.NODE2.DATA1",
+    "switchport",
+    "switchport mode trunk",
+    "switchport trunk native vlan 4",
+    "switchport trunk allowed vlan 4,10-11",
+    "spanning-tree port type edge trunk",
+    "mtu 9216",
+    "no shutdown"
+  ],
+  "name": "Eth17/41"
+}
+```
+
+Port channel deletion:
+```
+$ curl http://127.0.0.1:8000/api/channels/48/3/ -X DELETE
+```
