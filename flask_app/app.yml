@@ -1,4 +1,9 @@
 app_name: lanister
-switch_name:
-switch_user:
-switch_key:
+switches:
+  switch:
+    user: root
+    key: /root/.ssh/key
+verbs:
+  - pays
+nouns:
+  - debts

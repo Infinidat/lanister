@@ -27,7 +27,7 @@ Usage
 
 Interface lookup in MAC address table:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/\?macs=ecf4bbd60324,bc305bf6b830
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/\?macs=ecf4bbd60324,bc305bf6b830
 {
   "ports": {
     "bc:30:5b:f6:b8:30": "Eth13/47",
@@ -38,7 +38,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/\?macs=ecf4bbd60324,bc305bf6b830
 
 Interface lookup by description:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/\?descriptions=SLOT48.NODE3.DATA1,SLOT48.NODE2.DATA1
+$ curl http://127.0.0.1:8000/api/SW02/interfaces/\?descriptions=SLOT48.NODE3.DATA1,SLOT48.NODE2.DATA1
 {
   "ports": {
     "SLOT48.NODE2.DATA1": "Eth17/41",
@@ -49,7 +49,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/\?descriptions=SLOT48.NODE3.DATA1,SL
 
 Interface running configuration:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/
 {
   "config": [
     "description SLOT48.NODE2.DATA1",
@@ -67,7 +67,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/
 
 Interface shutdown:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"down"}' -X PUT
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"state":"down"}' -X PUT
 {
   "config": [
     "description SLOT48.NODE2.DATA1",
@@ -84,7 +84,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"down"}' -X P
 
 Interface no shutdown:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"up"}' -X PUT
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"state":"up"}' -X PUT
 {
   "config": [
     "description SLOT48.NODE2.DATA1",
@@ -102,7 +102,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"state":"up"}' -X PUT
 
 Port channel creation and configuration
 ```
-$ curl http://127.0.0.1:8000/api/channels/48/3/ -d '{"config":["switchport","switchport mode trunk","switchport trunk native vlan 4","switchport trunk allowed vlan 4,10-11","mtu 9216","no shutdown"]}' -X POST
+$ curl http://127.0.0.1:8000/api/SW01/channels/48/3/ -d '{"config":["switchport","switchport mode trunk","switchport trunk native vlan 4","switchport trunk allowed vlan 4,10-11","mtu 9216","no shutdown"]}' -X POST
 {
   "config": [
     "description SLOT48.NODE3.LACP",
@@ -118,7 +118,7 @@ $ curl http://127.0.0.1:8000/api/channels/48/3/ -d '{"config":["switchport","swi
 
 Interface channel group binding:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":"2483"}' -X PUT
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"bind":"2483"}' -X PUT
 {
   "config": [
     "description SLOT48.NODE2.DATA1",
@@ -137,7 +137,7 @@ $ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":"2483"}' -X PU
 
 Interface channel group unbinding:
 ```
-$ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":""}' -X PUT
+$ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"bind":""}' -X PUT
 {
   "config": [
     "description SLOT48.NODE2.DATA1",
@@ -155,5 +155,5 @@ $ curl http://127.0.0.1:8000/api/interfaces/Eth17_41/ -d '{"bind":""}' -X PUT
 
 Port channel deletion:
 ```
-$ curl http://127.0.0.1:8000/api/channels/48/3/ -X DELETE
+$ curl http://127.0.0.1:8000/api/SW01/channels/48/3/ -X DELETE
 ```
