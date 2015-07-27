@@ -102,10 +102,9 @@ $ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"state":"up"}' -
 
 Port channel creation and configuration
 ```
-$ curl http://127.0.0.1:8000/api/SW01/channels/48/3/ -d '{"config":["switchport","switchport mode trunk","switchport trunk native vlan 4","switchport trunk allowed vlan 4,10-11","mtu 9216","no shutdown"]}' -X POST
+$ curl http://127.0.0.1:8000/api/SW01/channels/2483/ -d '{"config":["switchport","switchport mode trunk","switchport trunk native vlan 4","switchport trunk allowed vlan 4,10-11","mtu 9216","no shutdown"]}' -X POST
 {
   "config": [
-    "description SLOT48.NODE3.LACP",
     "switchport",
     "switchport mode trunk",
     "switchport trunk native vlan 4",
@@ -155,5 +154,5 @@ $ curl http://127.0.0.1:8000/api/SW01/interfaces/Eth17_41/ -d '{"bind":""}' -X P
 
 Port channel deletion:
 ```
-$ curl http://127.0.0.1:8000/api/SW01/channels/48/3/ -X DELETE
+$ curl http://127.0.0.1:8000/api/SW01/channels/2483/ -X DELETE
 ```
