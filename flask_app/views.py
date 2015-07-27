@@ -5,7 +5,7 @@ import random
 
 views = Blueprint("views", __name__, template_folder="templates")
 
-def _exec_command(command, switch_name=None):
+def _exec_command(command, switch_name=''):
     if not switch_name:
         switch_name = [s for s in current_app.config['switches']][0]
     client = SSHClient()
@@ -17,6 +17,8 @@ def _exec_command(command, switch_name=None):
     output = sout.read().decode('ascii')
     errout = serr.read().decode('ascii')
     client.close()
+    if errout or 'Cmd exec error' in output:
+        abort(500, "Error executing '%s' on %s" % (command, switch_name))
     return output, errout
 
 def _encode_mac(mac):
@@ -72,8 +74,6 @@ def interface(switch_name, interface_name):
                 command = 'no channel-group'
             output, errout = _exec_command('config t ; interface %s ; %s ; exit' % (interface_name, command),
                     switch_name)
-            if errout:
-                abort(500, 'Error %s on switch when executing %s on %s' % (errout, command, interface_name))
         if 'state' in data:
             command = ''
             if data['state'] == 'down':
@@ -85,8 +85,6 @@ def interface(switch_name, interface_name):
             ifname = interface_name.replace('Eth','')
             output, errout = _exec_command('config ; interface ethernet %s ; %s ; exit ; exit' %
                     (ifname, command), switch_name)
-            if errout:
-                abort(500, 'Error %s on switch when executing %s on %s' % (errout, command, interface_name))
     output, errout = _exec_command('show running-config interface %s' % (interface_name), switch_name)
     config = [i.strip() for i in output.split(interface_name.replace('Eth',''))[-1].strip().split('\n')]
     return jsonify(dict(name=interface_name, config=config))
@@ -103,15 +101,13 @@ def channel(switch_name, channel_name):
             command += ' ; %s' % (' ; '.join(data['config']))
         if data and 'description' in data:
             command += ' ; %s' % (data['description'])
-        output, error = _exec_command(command, switch_name)
-        if 'Cmd exec error' in output:
-            abort(500, 'Error %s in output while creating port-channel %s' % (output, channel_name))
+        output, errout = _exec_command(command, switch_name)
     else:
         output, errout = _exec_command('show interface brief | i Po%s' % (channel_name), switch_name)
         if not output:
             abort(404, 'No such channel group %s' % (channel_name))
         if request.method == 'DELETE':
-            output, error = _exec_command('config t ; no interface port-channel %s ; exit' % (channel_name),
+            output, errout = _exec_command('config t ; no interface port-channel %s ; exit' % (channel_name),
                     switch_name)
             return Response(output, mimetype='text/plain')
     output, errout = _exec_command('show running-config interface port-channel%s' % (channel_name), switch_name)
