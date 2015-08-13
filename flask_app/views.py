@@ -8,6 +8,7 @@ views = Blueprint("views", __name__, template_folder="templates")
 def _exec_command(command, switch_name=''):
     if not switch_name:
         switch_name = [s for s in current_app.config['switches']][0]
+    current_app.logger.info('running on %s: %s' % (switch_name, command))
     client = SSHClient()
     client.set_missing_host_key_policy(AutoAddPolicy())
     client.connect(current_app.config['switches'][switch_name]['address'],
@@ -19,6 +20,7 @@ def _exec_command(command, switch_name=''):
     client.close()
     if errout or 'Cmd exec error' in output:
         abort(500, "Error executing '%s' on %s" % (command, switch_name))
+    current_app.logger.info('output from %s: %s' % (switch_name, output))
     return output, errout
 
 def _encode_mac(mac):
@@ -43,10 +45,8 @@ def index():
 def interface_list(switch_name):
     if 'macs' in request.args:
         macs = [_encode_mac(mac) for mac in request.args['macs'].split(',') if mac]
-        current_app.logger.info("Looking up macs %s" % (str(' '.join(macs))))
         output, errout = _exec_command('show mac address-table | i "%s"' % ('|'.join(macs)), switch_name)
         ports = {}
-        current_app.logger.info("Mac lookup returned output %s" % (output))
         for port in [i for i in output.strip().split('\n') if i]:
             port = port.split()
             if 'Eth' in port[-1]:
@@ -54,10 +54,8 @@ def interface_list(switch_name):
         return jsonify(dict(ports=ports))
     if 'descriptions' in request.args:
         descriptions = [i for i in request.args['descriptions'].split(',') if i]
-        current_app.logger.info("Looking up descriptions %s" % (str(' '.join(descriptions))))
         output, errout = _exec_command('show interface description | i %s' % ('|'.join(descriptions)), switch_name)
         ports = {}
-        current_app.logger.info("Description lookup returned output %s" % (output))
         for port in [i for i in output.strip().split('\n') if i]:
             port = port.split()
             ports[port[-1].strip()] = port[0].strip()
