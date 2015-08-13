@@ -23,8 +23,10 @@ def _exec_command(command, switch_name=''):
 
 def _encode_mac(mac):
     # turns 0A:1b:2c:3D:4e:5F or 0A1b2C3d4E5f into 0a1b.2c3d.4e5f (switch format)
-    mac = mac.lower().replace(':','')
-    return '%s.%s.%s' % (mac[0:4], mac[4:8], mac[8:12])
+    if ':' in mac:
+        mac = mac.lower().replace(':','')
+        return '%s.%s.%s' % (mac[0:4], mac[4:8], mac[8:12])
+    return mac
 
 def _decode_mac(mac):
     # turns 0a1b.2c3d.4e5f (switch format) into 0a:1b:2c:3d:4e:5f
@@ -41,8 +43,10 @@ def index():
 def interface_list(switch_name):
     if 'macs' in request.args:
         macs = [_encode_mac(mac) for mac in request.args['macs'].split(',') if mac]
+        current_app.logger.info("Looking up macs %s" % (str(' '.join(macs))))
         output, errout = _exec_command('show mac address-table | i "%s"' % ('|'.join(macs)), switch_name)
         ports = {}
+        current_app.logger.info("Mac lookup returned output %s" % (output))
         for port in [i for i in output.strip().split('\n') if i]:
             port = port.split()
             if 'Eth' in port[-1]:
@@ -50,8 +54,10 @@ def interface_list(switch_name):
         return jsonify(dict(ports=ports))
     if 'descriptions' in request.args:
         descriptions = [i for i in request.args['descriptions'].split(',') if i]
+        current_app.logger.info("Looking up descriptions %s" % (str(' '.join(descriptions))))
         output, errout = _exec_command('show interface description | i %s' % ('|'.join(descriptions)), switch_name)
         ports = {}
+        current_app.logger.info("Description lookup returned output %s" % (output))
         for port in [i for i in output.strip().split('\n') if i]:
             port = port.split()
             ports[port[-1].strip()] = port[0].strip()
