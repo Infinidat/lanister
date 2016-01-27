@@ -1,6 +1,7 @@
 #! /usr/bin/python
 from __future__ import print_function
 import os
+import sys
 import time
 import random
 import string
@@ -14,11 +15,13 @@ bootstrap_env(["base"])
 
 from _lib.params import APP_NAME
 from _lib.source_package import prepare_source_package
-from _lib.deployment import generate_nginx_config, run_uwsgi
-from _lib.docker import build_docker_image, start_docker_container, stop_docker_container
+from _lib.db import db
+from _lib.celery import celery
+from _lib.utils import interact
+from _lib.deployment import run_gunicorn
 import click
 import requests
-
+import logbook
 
 ##### ACTUAL CODE ONLY BENEATH THIS POINT ######
 
@@ -28,8 +31,9 @@ def cli():
     pass
 
 
-cli.add_command(run_uwsgi)
-cli.add_command(generate_nginx_config)
+cli.add_command(run_gunicorn)
+cli.add_command(db)
+cli.add_command(celery)
 
 @cli.command('ensure-secret')
 @click.argument("conf_file")
@@ -40,8 +44,11 @@ def ensure_secret(conf_file):
     if os.path.exists(conf_file):
         return
     with open(conf_file, "w") as f:
-        secret_key = "".join([random.choice(string.ascii_letters) for i in range(50)])
-        print('SECRET_KEY: "{0}"'.format(secret_key), file=f)
+        print('SECRET_KEY: "{0}"'.format(_generate_secret()), file=f)
+        print('SECURITY_PASSWORD_SALT: "{0}"'.format(_generate_secret()), file=f)
+
+def _generate_secret(length=50):
+    return "".join([random.choice(string.ascii_letters) for i in range(length)])
 
 @cli.command()
 @click.option("--develop", is_flag=True)
@@ -58,9 +65,14 @@ def bootstrap(develop, app):
 
 @cli.command()
 @click.option('--livereload/--no-livereload', is_flag=True, default=True)
+@click.option('-p', '--port', default=8000, envvar='TESTSERVER_PORT')
+@click.option('--tmux/--no-tmux', is_flag=True, default=True)
 @requires_env("app", "develop")
-def testserver(livereload, port=8000):
+def testserver(tmux, livereload, port):
+    if tmux:
+        return _run_tmux_frontend(port=port)
     from flask_app.app import create_app
+    app = create_app({'DEBUG': True, 'TESTING': True, 'SECRET_KEY': 'dummy', 'SECURITY_PASSWORD_SALT': 'dummy'})
 
     extra_files=[
         from_project_root("flask_app", "app.yml")
@@ -73,23 +85,24 @@ def testserver(livereload, port=8000):
         for filename in extra_files:
             s.watch(filename)
         s.watch('flask_app')
+        logbook.StreamHandler(sys.stderr, level='DEBUG').push_application()
         s.serve(port=port, liveport=35729)
     else:
         app.run(port=port, extra_files=extra_files)
 
+def _run_tmux_frontend(port):
+    tmuxp = from_env_bin('tmuxp')
+    os.execve(tmuxp, [tmuxp, 'load', from_project_root('_lib', 'frontend_tmux.yml')], dict(os.environ, TESTSERVER_PORT=str(port), CONFIG_DIRECTORY=from_project_root("conf.d")))
 
 @cli.command()
-@click.option("--dest", type=click.Choice(["production", "staging", "localhost", "vagrant"]), help="Deployment target", required=True)
+@click.option("--dest", type=click.Choice(["production", "staging", "localhost", "vagrant", "custom"]), help="Deployment target", required=True)
+@click.option("-i", "--inventory", type=str, default=None, help="Path to an inventory file. Should be specified only when \"--dest custom\" is set")
+@click.option("--vagrant-machine", type=str, default="", help="Vagrant machine to provision")
 @click.option("--sudo/--no-sudo", default=False)
 @click.option("--ask-sudo-pass/--no-ask-sudo-pass", default=False)
-def deploy(dest, sudo, ask_sudo_pass):
-    _run_deploy(dest, sudo, ask_sudo_pass)
-
-
-def _run_deploy(dest, sudo=False, ask_sudo_pass=False):
+def deploy(dest, sudo, ask_sudo_pass, vagrant_machine, inventory):
     prepare_source_package()
     ansible = ensure_ansible()
-    click.echo(click.style("Running deployment on {0!r}. This may take a while...".format(dest), fg='magenta'))
 
     if dest == "vagrant":
         # Vagrant will invoke ansible
@@ -97,11 +110,21 @@ def _run_deploy(dest, sudo=False, ask_sudo_pass=False):
         environ["PATH"] = "{}:{}".format(os.path.dirname(ansible), environ["PATH"])
         # "vagrant up --provision" doesn't call provision if the virtual machine is already up,
         # so we have to call vagrant provision explicitly
-        subprocess.check_call('vagrant up', shell=True, env=environ)
-        subprocess.check_call('vagrant provision', shell=True, env=environ)
+        click.echo(click.style("Running deployment on Vagrant. This may take a while...", fg='magenta'))
+        subprocess.check_call('vagrant up ' + vagrant_machine, shell=True, env=environ)
+        subprocess.check_call('vagrant provision ' + vagrant_machine, shell=True, env=environ)
     else:
-        cmd = [ansible, "-i",
-               from_project_root("ansible", "inventories", dest)]
+        if dest == "custom":
+            if inventory is None:
+                raise click.ClickException("-i/--inventory should be specified together with \"--dest custom\"")
+            if not os.path.exists(inventory):
+                raise click.ClickException("Custom inventory file {} doesn't exist".format(inventory))
+        else:
+            if inventory is not None:
+                raise click.ClickException("-i/--inventory should be specified only when \"--dest custom\" is specified")
+            inventory = from_project_root("ansible", "inventories", dest)
+        click.echo(click.style("Running deployment on {}. This may take a while...".format(inventory), fg='magenta'))
+        cmd = [ansible, "-i", inventory]
         if dest in ("localhost",):
             cmd.extend(["-c", "local"])
             if dest == "localhost":
@@ -153,16 +176,15 @@ def _run_fulltest(extra_args=()):
 
 @cli.command('travis-test')
 def travis_test():
+    subprocess.check_call('createdb {0}'.format(APP_NAME), shell=True)
     _run_unittest()
-    _run_deploy('localhost')
-    _wait_for_travis_availability()
-    _run_fulltest(["--www-port=80"])
+    subprocess.check_call('dropdb {0}'.format(APP_NAME), shell=True)
 
 
 def _wait_for_travis_availability():
     click.echo(click.style("Waiting for service to become available on travis", fg='magenta'))
     time.sleep(10)
-    for retry in range(10):
+    for _ in range(10):
         click.echo("Checking service...")
         resp = requests.get("http://localhost/")
         click.echo("Request returned {0}".format(resp.status_code))
@@ -174,32 +196,25 @@ def _wait_for_travis_availability():
     click.echo(click.style("Service is up", fg='green'))
 
 
-@cli.group()
-def docker():
-    pass
+def _db_container_name():
+    return '{0}-db'.format(APP_NAME)
 
-@docker.command()
-def build():
-    _run_docker_build()
+@cli.command()
+@requires_env("app", "develop")
+def shell():
+    from flask_app.app import create_app
+    from flask_app import models
 
-def _run_docker_build():
-    prepare_source_package()
-    build_docker_image(tag=APP_NAME, root=from_project_root())
+    app = create_app()
 
-@docker.command()
-@click.option("-p", "--port", default=80, type=int)
-def start(port):
-    _run_docker_start(port)
+    with app.app_context():
+        interact({
+            'db': db,
+            'app': app,
+            'models': models,
+            'db': models.db,
+        })
 
-def _run_docker_start(port):
-    persistent_dir = from_project_root('persistent')
-    if not os.path.isdir(persistent_dir):
-        os.makedirs(persistent_dir)
-    start_docker_container(persistent_dir=persistent_dir, port_bindings={80: port})
-
-@docker.command()
-def stop():
-    stop_docker_container()
 
 if __name__ == "__main__":
     cli()

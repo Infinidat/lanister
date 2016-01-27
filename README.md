@@ -2,7 +2,7 @@ Lanister
 =============
 
 Lanister is a Nexus switch manager, until something better comes along. It's
-based on [weber-minimal](https://github.com/vmalloc/weber-minimal) and is
+based on [weber-backend](https://github.com/vmalloc/weber-backend) and is
 distributed under the BSD 3-clause license. Weber is as well, and the original
 license has been maintained as WEBER-LICENSE
 

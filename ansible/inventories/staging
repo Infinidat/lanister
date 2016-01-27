@@ -1,1 +1,5 @@
 [webapp]
+lanister-stage  ansible_ssh_user=root
+
+[db]
+lanister-db-s   ansible_ssh_user=root

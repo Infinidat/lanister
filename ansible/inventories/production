@@ -1,2 +1,5 @@
 [webapp]
-lanister
+lanister ansible_ssh_user=root
+
+[db]
+#my-db-host002 ansible_ssh_user=root

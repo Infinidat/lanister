@@ -1,6 +1,7 @@
 import flask
 import os
 import yaml
+from flask.ext.security import Security
 from flask.ext.mail import Mail
 import logbook
 from logbook.compat import redirect_logging
@@ -13,9 +14,7 @@ def create_app(config=None):
 
     app = flask.Flask(__name__, static_folder=os.path.join(ROOT_DIR, "..", "static"))
 
-    app.config["SECRET_KEY"] = ""
-
-    _CONF_D_PATH = os.environ.get('CONFIG_DIRECTORY', os.path.join(ROOT_DIR, "..", "conf.d"))
+    _CONF_D_PATH = os.environ.get('CONFIG_DIRECTORY', os.path.join(ROOT_DIR, "..", "..", "conf.d"))
 
     configs = [os.path.join(ROOT_DIR, "app.yml")]
 
@@ -29,6 +28,11 @@ def create_app(config=None):
 
     app.config.update(config)
 
+    if 'SQLALCHEMY_DATABASE_URI' not in app.config:
+        app.config['SQLALCHEMY_DATABASE_URI'] = os.path.expandvars(
+            os.environ.get('SQLALCHEMY_DATABASE_URI', 'postgresql://localhost/{0}'.format(app.config['app_name'])))
+
+
     if os.path.exists("/dev/log"):
         syslog_handler = logbook.SyslogHandler(app.config['app_name'], "/dev/log")
         syslog_handler.push_application()
@@ -40,10 +44,21 @@ def create_app(config=None):
 
     Mail(app)
 
-    #from .errors import errors
-    from .views import views
+    from . import models
 
-    app.register_blueprint(views)
+    models.db.init_app(app)
+
+    from . import auth
+    Security(app, auth.user_datastore)
+
+    from .views import views
+    from .setup import setup
+    blueprints = [views, setup]
+
+    from .errors import errors
+
+    for blueprint in blueprints:
+        app.register_blueprint(blueprint)
 
 #    for code in errors:
 #        app.errorhandler(code)(errors[code])
