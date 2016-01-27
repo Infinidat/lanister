@@ -25,4 +25,42 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary=roles_users,
                             backref=db.backref('users', lazy='dynamic'))
 
+_MAC_ADDRESS = db.String(255)
 
+class Vlan(db.Model, ManagedMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64))
+    switches = db.relationship("Switch", secondary=vlan_switch, backref="vlans")
+    connected_macs = db.relationship("Mac", secondary=vlan_mac, backref="vlans")
+    connected_ports = db.relationship("Port", secondary=vlan_ports, backref="vlans")
+
+class Switch(db.Model, ManagedMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    hostname = db.Column(db.String(255), nullable=False)
+    interfaces = db.relationship('Interface', backref=db.backref('switch'))
+    username = db.Column(db.String(255), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    private_key = db.Column(db.String(2048), nullable=False)
+
+class Port(db.Model, ManagedMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), nullable=False)
+    type = db.Column(db.String(32))
+    mode = db.Column(db.String(32))
+    status = db.Column(db.String(32))
+    reason = db.Column(db.String(64))
+    description = db.Column(db.String(256))
+    switch_id = db.Column(db.Integer, db.ForeignKey('switch.id', ondelete="CASCADE"))
+
+class EthernetPort(Port):
+    speed = db.Column(db.String(32))
+    connected_macs = db.relationship('Mac', backref=db.backref('ethernet_port'))
+
+class PortChannel(Port):
+    protocol = db.Column(db.String(32))
+    connected_eths = db.relationship('EthernetPort', backref=db.backref('port_channel'))
+    connected_macs = db.relationship('Mac', secondary=mac_port_channel, backref="port_cannels")
+
+class Mac(db.Model, ManagedMixin):
+    id = db.Column(_MAC_ADDRESS, primary_key=True)
+    type = db.Column(db.String(32))
