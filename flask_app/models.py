@@ -1,5 +1,6 @@
 from flask.ext.sqlalchemy import SQLAlchemy
 from flask.ext.security import UserMixin, RoleMixin
+import datetime
 
 db = SQLAlchemy()
 
@@ -25,14 +26,30 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary=roles_users,
                             backref=db.backref('users', lazy='dynamic'))
 
+class ManagedMixin(object):
+    last_seen = db.Column(db.DateTime(), default=datetime.datetime.now)
+    managed = db.Column(db.Boolean(), default=False)
+
+    @classmethod
+    def from_switch_object(cls, switch_obj):
+        raise NotImplementedError()  # pragma: no cover
+
+    @classmethod
+    def get_or_create(cls, **kwargs):
+        inst = cls.query.filter_by(**kwargs).first()
+        if not inst:
+            inst = cls(**kwargs)
+            db.session.add(inst)
+        return inst
+
 _MAC_ADDRESS = db.String(255)
 
 class Vlan(db.Model, ManagedMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64))
-    switches = db.relationship("Switch", secondary=vlan_switch, backref="vlans")
-    connected_macs = db.relationship("Mac", secondary=vlan_mac, backref="vlans")
-    connected_ports = db.relationship("Port", secondary=vlan_ports, backref="vlans")
+#    switches = db.relationship("Switch", secondary=vlan_switch, backref="vlans")
+#    connected_macs = db.relationship("Mac", secondary=vlan_mac, backref="vlans")
+#    connected_ports = db.relationship("Port", secondary=vlan_ports, backref="vlans")
 
 class Switch(db.Model, ManagedMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -59,7 +76,7 @@ class EthernetPort(Port):
 class PortChannel(Port):
     protocol = db.Column(db.String(32))
     connected_eths = db.relationship('EthernetPort', backref=db.backref('port_channel'))
-    connected_macs = db.relationship('Mac', secondary=mac_port_channel, backref="port_cannels")
+#    connected_macs = db.relationship('Mac', secondary=mac_port_channel, backref="port_cannels")
 
 class Mac(db.Model, ManagedMixin):
     id = db.Column(_MAC_ADDRESS, primary_key=True)

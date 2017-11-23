@@ -11,6 +11,7 @@ import logbook
 from celery import Celery
 from celery.signals import after_setup_logger, after_setup_task_logger
 from celery.log import redirect_stdouts_to_logger
+from celery.schedules import crontab
 
 from .app import create_app
 
@@ -23,6 +24,13 @@ queue.conf.update(
     CELERY_ACCEPT_CONTENT=['json'],  # Ignore other content
     CELERY_RESULT_SERIALIZER='json',
     CELERY_ENABLE_UTC=True,
+    CELERYBEAT_SCHEDULE={
+        'refresh': {
+            'task': 'flask_app.tasks.refresh',
+            'schedule': crontab(minute='*/10'),
+        },
+    },
+    CELERY_TIMEZONE='UTC'
 )
 
 def setup_log(**args):
@@ -56,3 +64,16 @@ def needs_app_context(f):
 
 after_setup_logger.connect(setup_log)
 after_setup_task_logger.connect(setup_log)
+
+@queue.task
+@needs_app_context
+def refresh():
+    for switch in models.Switch.query.all():
+        _refresh_switch(switch)
+
+
+def _refresh_switch(switch):
+    with closing(_get_ssh_client(switch)) as client:
+        _refresh_switch_ports(switch, client) # show interface bried + show running interface
+        _refresh_vlans(switch, client) # show vlan
+        _refresh_mac_address_table(switch, client) # show mac address-table

@@ -117,3 +117,19 @@ def channel(switch_name, channel_name):
     output, errout = _exec_command('show running-config interface port-channel%s' % (channel_name), switch_name)
     config = [i.strip() for i in output.split('port-channel%s' % (channel_name))[-1].strip().split('\n')]
     return jsonify(dict(name='port-channel%s' % (channel_name), config=config))
+
+@views.route("/api/<switch_name>/macaddresses/<mac_address>/", methods=['GET'])
+def mac_address(switch_name, mac_address):
+    mac_addresses = [_encode_mac(mac_address)]
+    output, errout = _exec_command('show mac address-table | i "%s"' % ('|'.join(mac_addresses)), switch_name)
+    macs = {}
+    for line in [i for i in output.strip().split('\n') if i]:
+        line = line.split()
+        if 'Eth' in line[-1]:
+            interface_description = line[-1].strip()
+            output_desc, errout = _exec_command('show interface description | i %s' % (interface_description), switch_name)
+            for desc_line in [i for i in output_desc.strip().split('\n') if i]:
+                desc_line = desc_line.split()
+                macs[_decode_mac(line[2].strip())] = dict(interface=line[-1].strip(),
+                                                          slot=desc_line[-1].strip())
+    return jsonify(dict(macs=macs))
