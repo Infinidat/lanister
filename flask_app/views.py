@@ -118,6 +118,21 @@ def channel(switch_name, channel_name):
     config = [i.strip() for i in output.split('port-channel%s' % (channel_name))[-1].strip().split('\n')]
     return jsonify(dict(name='port-channel%s' % (channel_name), config=config))
 
+@views.route("/api/<switch_name>/macaddresses/", methods=['GET'])
+def mac_addresses(switch_name):
+    output, errout = _exec_command('show mac address-table | i Eth', switch_name)
+    output_desc, errout = _exec_command('show interface description | i Eth', switch_name)
+    interfaces = {}
+    for desc_line in [i for i in output_desc.strip().split('\n') if i]:
+        interfaces[desc_line.split()[0].strip()] = desc_line.split()[-1].strip()
+    macs = {}
+    for line in [i for i in output.strip().split('\n') if i]:
+        line = line.split()
+        interface_description = line[-1].strip()
+        macs[_decode_mac(line[2].strip())] = dict(interface=line[-1].strip(),
+                                                  description=interfaces[line[-1].strip()])
+    return jsonify(dict(macs=macs))
+
 @views.route("/api/<switch_name>/macaddresses/<mac_address>/", methods=['GET'])
 def mac_address(switch_name, mac_address):
     mac_addresses = [_encode_mac(mac_address)]
@@ -133,3 +148,60 @@ def mac_address(switch_name, mac_address):
                 macs[_decode_mac(line[2].strip())] = dict(interface=line[-1].strip(),
                                                           slot=desc_line[-1].strip())
     return jsonify(dict(macs=macs))
+
+@views.route("/api/<switch_name>/slots/", methods=['GET'])
+def slots(switch_name):
+    output_macs, errout = _exec_command('show mac address-table | i Eth', switch_name)
+    output_desc, errout = _exec_command('show interface description | i Eth', switch_name)
+    interfaces = {}
+    for mac_line in [i for i in output_macs.strip().split('\n') if i]:
+        interfaces[mac_line.split()[-1].strip()] = _decode_mac(mac_line.split()[2].strip())
+    slots = {}
+    for line in [i for i in output_desc.strip().split('\n') if i]:
+        line = line.split()
+        if 'SLOT' in line[-1] and len(line[-1].split('.')) in [2,3,4] and 'SLOT' in line[-1].split('.')[0]:
+            slot_name, component = _parse_description(line[-1])
+            interface = line[0].strip()
+            if not slot_name in slots:
+                slots[slot_name] = dict(interfaces=[])
+            slots[slot_name]['interfaces'].append(dict(interface=interface,
+                                                       component=component,
+                                                       mac_address=interfaces[interface] if interface in interfaces else ''))
+    return jsonify(dict(slots=slots))
+
+@views.route("/api/<switch_name>/slots/<slot_name>/", methods=['GET'])
+def slot(switch_name, slot_name):
+    output, errout = _exec_command('show interface description | i %s' % (slot_name), switch_name)
+    slots = {}
+    for line in [i for i in output.strip().split('\n') if i]:
+        line = line.split()
+        if 'Eth' in line[0]:
+            slot_name, component = _parse_description(line[-1])
+            interface = line[0].strip()
+            output_mac, errout = _exec_command('show mac address-table | i %s' % (interface), switch_name)
+            for mac_line in [i for i in output_mac.strip().split('\n') if i]:
+                mac_line = mac_line.split()
+                if not slot_name in slots:
+                    slots[slot_name] = dict(interfaces=[])
+                slots[slot_name]['interfaces'].append(dict(interface=interface,
+                                                           component=component,
+                                                           mac_address=_decode_mac(mac_line[2].strip())))
+    return jsonify(dict(slots=slots))
+
+def _parse_description(interface_description):
+    slot_name = interface_description.split('.')[0].strip()
+    if len(interface_description.split('.')) == 2:
+        component = interface_description.split('.')[-1].strip()
+    elif len(interface_description.split('.')) == 3:
+        if interface_description.split('.')[-1].strip() in ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH']:
+            slot_name = ".".join([slot_name, interface_description.split('.')[-1].strip()])
+            component = interface_description.split('.')[-2].strip()
+        else:
+            component = ".".join(interface_description.split('.')[-2:])
+    else:
+        if interface_description.split('.')[-1].strip() in ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH']:
+            slot_name = ".".join([slot_name, interface_description.split('.')[-1].strip()])
+            component = ".".join(interface_description.split('.')[-3:-1])
+        else:
+            component = ".".join(interface_description.split('.')[-3:])
+    return slot_name, component
